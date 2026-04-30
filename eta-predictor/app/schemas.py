@@ -1,12 +1,12 @@
 from pydantic import BaseModel, Field, computed_field, field_validator, model_validator
 from pydantic import ConfigDict
-from typing import Literal
+from typing import ClassVar, Literal
 from datetime import datetime
 import math
 
 # === Request Schema ======================================================
 
-class LogisticsRequest(BaseModel):
+class ETARequest(BaseModel):
 
     # model config controls Pydantic behaviour
     model_config = ConfigDict(
@@ -26,13 +26,13 @@ class LogisticsRequest(BaseModel):
     vehicle_type: Literal['van', 'truck', 'motorcycle'] = Field('truck', description="Type of vehicle used for transportation")
 
     # === Field Validators ==================================================
-    @field_validator('origin_lat', 'origin_lon', 'dest_lat', 'dest_lon', model='before')
+    @field_validator('origin_lat', 'origin_lon', 'dest_lat', 'dest_lon', mode='before')
     @classmethod
     def round_coordinates_to_6dp(cls, v) -> float:
         return round(float(v), 6)
     
     # === Cross-Field Validators (model_validator) ================================================
-    @model_validator(model='after')
+    @model_validator(mode='after')
     def origin_and_destination_must_differ(self) -> 'ETARequest':
         same_lat = abs (self.origin_lat - self.dest_lat) < 0.001
         same_lon = abs (self.origin_lon - self.dest_lon) < 0.001
@@ -40,7 +40,7 @@ class LogisticsRequest(BaseModel):
             raise ValueError("Origin and destination coordinates must differ by at least 0.001 degrees.")
         return self
     
-    @model_validator(model='after')
+    @model_validator(mode='after')
     def motorcycle_weight_limit(self) -> 'ETARequest':
         if self.vehicle_type == 'motorcycle' and self.cargo_weight_kg > 100:
             raise ValueError("Motorcycles cannot carry more than 100 kg of cargo.")
@@ -81,7 +81,7 @@ class LogisticsRequest(BaseModel):
             1.0 if self.vehicle_type == 'motorcycle' else 0.0
         ]
     
-    FEATURES_NAMES = [
+    FEATURES_NAMES: ClassVar[list[str]] = [
         'distance_km',
         'cargo_weight_kg',
         'is_rush_hour',
@@ -94,21 +94,22 @@ class LogisticsRequest(BaseModel):
         'vehicle_motorcycle'
     ]
 
-    # === Response Schema =====================================================
 
-    class ETAResponse(BaseModel):
-        eta_minutes: float
-        eta_human_readable: str
-        model_version: str
-        distance_km: float
-        confidence_low: float
-        confidence_high: float
-        is_rush_hour: bool
-        prediction_timestamp: datetime = Field(default_factory=datetime.utcnow)
+# === Response Schema =====================================================
+
+class ETAResponse(BaseModel):
+    eta_minutes: float
+    eta_human_readable: str
+    model_version: str
+    distance_km: float
+    confidence_low: float
+    confidence_high: float
+    is_rush_hour: bool
+    prediction_timestamp: datetime = Field(default_factory=datetime.utcnow)
 
 
-    # === Health Check Response Schema =====================================================    
-    class HealthResponse(BaseModel):
-        status: Literal['healthy', 'degraded', 'unhealthy']
-        model_loaded: bool
-        api_version: str
+# === Health Check Response Schema =====================================================    
+class HealthResponse(BaseModel):
+    status: Literal['healthy', 'degraded', 'unhealthy']
+    model_loaded: bool
+    api_version: str

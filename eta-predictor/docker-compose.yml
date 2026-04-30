@@ -1,0 +1,52 @@
+services:
+
+ # === Service 1: Our ETA Prediction API ===
+  eta-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runtime
+    image: eta-predictor:latest
+    container_name: eta-predictor-api
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./models:/app/models:ro
+    environment:
+      - PYTHONUNBUFFERED=1
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    restart: unless-stopped
+    depends_on:
+      - mlflow-server
+    networks:
+      - sprint-network
+
+  # === Service 2: MLflow Tracking Server ===
+  mlflow-server:
+    image: python:3.9-slim
+    container_name: mlflow-tracking
+    command: >
+      bash -c 'pip install mlflow[extras] && mlflow server
+        --host 0.0.0.0
+        --port 5000
+        --backend-store-ui sqlite:///mlflow/mlflow.db
+        --default-artifact-root /mlflow/artifacts'
+    ports:
+      - "5000:5000"
+    volumes:
+      - mlflow-data:/mlflow
+    networks:
+      - sprint-network
+    restart: unless-stopped
+  
+volumes:
+  mlflow-data:
+
+networks:
+  sprint-network:
+    driver: bridge
